@@ -1,0 +1,29 @@
+{
+  "description": "Compact Guardian - Save and restore context around compaction",
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/compact-save.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/compact-restore.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
