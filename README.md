@@ -6,7 +6,7 @@
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
 [![Platform](https://img.shields.io/badge/platform-macOS%20|%20Linux-lightgrey)](https://github.com/ibarapascal/compact-guardian)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/ibarapascal/compact-guardian/releases)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue)](https://github.com/ibarapascal/compact-guardian/releases)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -63,29 +63,48 @@ That's it. The plugin runs automatically whenever compaction occurs.
 
 | Content | Count | Purpose |
 |---------|-------|---------|
-| User messages | Last 3 | Your recent instructions |
-| AI tool calls | Up to 20 | What the AI already did (Read, Edit, Bash, etc.) |
+| User messages | Last 5 | Your recent instructions |
+| AI text response | Last 1 | AI's latest progress update (truncated to 1000 chars) |
+| Task checklists | Up to 20 | Checklist items (`- [ ]`, `- [x]`) from AI responses |
+| AI tool calls | Up to 30 | What the AI already did (Read, Edit, Bash, TaskCreate, etc.) |
 
 **Example snapshot** (injected after compaction):
 
 ```markdown
-# Compact Context Snapshot
+# Pre-Compaction Context Snapshot
+
+> **IMPORTANT**: This snapshot was saved BEFORE compaction. The compact summary
+> above may be inaccurate. Cross-check every claim in the summary against the
+> data below. If the summary says a task is "completed" but no corresponding
+> tool calls (Edit, Write, Bash) appear below, treat it as NOT done.
+> Do NOT trust the compact summary alone. Resume work from where the snapshot shows.
 
 > 2026-02-07 14:30:00 | Session: abc12345 | CWD: /Users/you/project
 
 ## Recent User Instructions
 
 ### [2]
-Fix the authentication bug in login.tsx
+Fix the authentication bug in login.tsx and add tests
 
 ### [1] <- Latest
-Also update the tests
+Also update the API docs
 
-## AI Actions After Latest Instruction
+## Task Checklists Found in AI Responses
+
+- [x] Fix login bug
+- [ ] Add unit tests
+- [ ] Update API docs
+
+## Last AI Response Before Compaction
+
+I've completed the first task (fixing the login bug). Next I'll work on
+the unit tests...
+
+## AI Actions During Recent Conversation
 
 - Read: src/components/login.tsx
 - Edit: src/components/login.tsx
-- Read: src/components/__tests__/login.test.tsx
+- TaskCreate: Add unit tests | Write tests for the login component
 
 *Interrupted by compaction, actions above may be incomplete*
 ```
@@ -99,8 +118,10 @@ Also update the tests
 Triggered before every compaction (manual or automatic):
 
 - Reads the session transcript (JSONL)
-- Extracts the last 3 genuine user messages (filters out system messages, tool results, etc.)
-- Extracts AI tool calls made after the latest user message
+- Extracts the last 5 genuine user messages (filters out system messages, tool results, etc.)
+- Extracts AI text responses and checklist items (`- [ ]`, `- [x]`)
+- Extracts AI tool calls across the recent conversation window (including TaskCreate/TaskUpdate)
+- Adds a verification instruction telling the AI to cross-check the compact summary
 - Writes a concise snapshot to `~/.claude/last-compact-context.md`
 
 ### 2. SessionStart Hook (`compact-restore.sh`)
@@ -116,7 +137,7 @@ Triggered after compaction completes:
 ## Safety
 
 - **10-minute expiration**: Snapshots older than 10 minutes are ignored, preventing cross-session contamination
-- **Minimal context cost**: Only 3 messages + up to 20 tool calls, typically ~20-30 lines
+- **Minimal context cost**: Up to 5 messages + checklists + 30 tool calls, capped at 12K chars (~3K tokens)
 - **Non-blocking**: All errors are handled gracefully—if anything fails, the hook exits silently
 - **Read-only transcript access**: The save script only reads the JSONL transcript, never modifies it
 

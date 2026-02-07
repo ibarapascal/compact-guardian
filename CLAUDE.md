@@ -65,18 +65,31 @@ compact-guardian/
 
 The main logic. Parses the JSONL transcript to extract:
 
-1. **User messages** — filtered to exclude:
+1. **User messages** (last 5, truncated at 1500 chars) — filtered to exclude:
    - Tool result messages
    - System-generated messages (`<system-reminder>`, `<command-name>`, etc.)
    - Compact summaries ("This session is being continued from...")
    - Hook-injected content (`<user-prompt-submit-hook>`)
 
-2. **AI tool calls** — extracted from assistant `tool_use` blocks with key params:
+2. **AI text responses** — captures the last assistant text response (up to 1000 chars)
+
+3. **Task checklists** — extracted from AI text using regex patterns:
+   - `- [ ]` / `- [x]` — Markdown checkboxes
+   - `1. [ ]` / `1. [x]` — Numbered checkboxes
+   - `TODO` / `FIXME` / `HACK` markers at line start
+
+4. **AI tool calls** (up to 30, priority-based) — extracted from assistant `tool_use` blocks:
    - `Read`/`Edit`/`Write`: `file_path`
    - `Bash`: first 80 chars of `command`
    - `Grep`/`Glob`: `pattern`
    - `Task`: `description`
    - `WebFetch`/`WebSearch`: `url`/`query`
+   - `TaskCreate`: `subject` + `description`
+   - `TaskUpdate`: `taskId` + `status` + `subject`
+   - `TodoWrite`: first 5 todos with `status` + `content`
+
+Output includes a verification instruction header telling the AI to cross-check the compact summary.
+Total output capped at 12000 chars.
 
 ### compact-restore.sh
 

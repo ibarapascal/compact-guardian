@@ -1,6 +1,6 @@
 {
   "name": "compact-guardian",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Prevent task loss during context compaction. Saves recent user instructions and AI progress before compact, then auto-restores them after compaction via SessionStart stdout injection.",
   "license": "MIT",
   "keywords": ["compact", "context", "restore", "precompact", "session"],
