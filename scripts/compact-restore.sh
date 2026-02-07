@@ -1,14 +1,24 @@
 #!/bin/bash
-# SessionStart hook (compact): Auto-restore context after compaction
-# Trigger: SessionStart (matcher: compact)
+# SessionStart hook (compact): Restore context after compaction
 # Reads snapshot saved by PreCompact hook, outputs to stdout for AI context injection
 
-CONTEXT_FILE="$HOME/.claude/last-compact-context.md"
+SNAPSHOT_DIR="$HOME/.claude"
 
-# File must exist and be non-empty
-[ ! -s "$CONTEXT_FILE" ] && exit 0
+# Parse session_id from stdin
+INPUT=$(cat 2>/dev/null)
+SESSION_ID=""
+if [ -n "$INPUT" ]; then
+  SESSION_ID=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null)
+fi
 
-# 10-minute expiration (avoid stale cross-session data)
+# Session-specific snapshot only
+if [ -z "$SESSION_ID" ] || [ ! -s "${SNAPSHOT_DIR}/compact-snapshot-${SESSION_ID}.md" ]; then
+  exit 0
+fi
+
+CONTEXT_FILE="${SNAPSHOT_DIR}/compact-snapshot-${SESSION_ID}.md"
+
+# 10-minute expiration
 if [ "$(uname)" = "Darwin" ]; then
   FILE_AGE=$(( $(date +%s) - $(stat -f %m "$CONTEXT_FILE") ))
 else
@@ -18,5 +28,8 @@ fi
 
 # stdout -> injected into AI context
 cat "$CONTEXT_FILE"
+
+# Clean up after restore
+rm -f "$CONTEXT_FILE"
 
 exit 0

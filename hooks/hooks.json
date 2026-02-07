@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/compact-save.sh",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/compact_save.py",
             "timeout": 15
           }
         ]

@@ -6,13 +6,11 @@
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
 [![Platform](https://img.shields.io/badge/platform-macOS%20|%20Linux-lightgrey)](https://github.com/ibarapascal/compact-guardian)
-[![Version](https://img.shields.io/badge/version-0.1.1-blue)](https://github.com/ibarapascal/compact-guardian/releases)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue)](https://github.com/ibarapascal/compact-guardian/releases)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Shell](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/ibarapascal/compact-guardian/pulls)
-[![AI Assisted](https://img.shields.io/badge/AI%20Assisted-Welcome-blueviolet)](https://github.com/ibarapascal/compact-guardian)
 
 </div>
 
@@ -26,7 +24,6 @@ Claude Code plugin that protects your in-progress tasks from being lost during c
 - Long sessions hit context limits, triggering automatic compaction
 - The compact summary may falsely claim tasks are "completed" when they're not
 - After compaction, the AI trusts the summary and skips unfinished work
-- Your instructions silently disappear
 
 **What it does:**
 - Saves your recent instructions and AI's progress before compaction
@@ -36,14 +33,14 @@ Claude Code plugin that protects your in-progress tasks from being lost during c
 **How it works:**
 
 ```
-PreCompact hook → compact-save.sh → saves snapshot to file
-                    ↓
+PreCompact hook -> compact_save.py -> saves snapshot to file
+                    |
             Context compaction happens
-                    ↓
-SessionStart(compact) hook → compact-restore.sh → restores snapshot via stdout
-                    ↓
+                    |
+SessionStart(compact) hook -> compact-restore.sh -> restores snapshot via stdout
+                    |
             AI sees both compact summary AND original context
-            → can verify what's actually done
+            -> can verify what's actually done
 ```
 
 ---
@@ -61,85 +58,92 @@ That's it. The plugin runs automatically whenever compaction occurs.
 
 ## What Gets Saved
 
-| Content | Count | Purpose |
-|---------|-------|---------|
-| User messages | Last 5 | Your recent instructions |
-| AI text response | Last 1 | AI's latest progress update (truncated to 1000 chars) |
-| Task checklists | Up to 20 | Checklist items (`- [ ]`, `- [x]`) from AI responses |
-| AI tool calls | Up to 30 | What the AI already did (Read, Edit, Bash, TaskCreate, etc.) |
+| Content | Detail | Purpose |
+|---------|--------|---------|
+| User messages | Last 5 (filtered) | Your recent instructions |
+| AI response | Last text (up to 1000 chars) | AI's latest progress |
+| Checklists | `- [ ]` / `- [x]` items | Task completion state |
+| Tool calls | Last 20 summaries | What the AI already did |
 
 **Example snapshot** (injected after compaction):
 
 ```markdown
 # Pre-Compaction Context Snapshot
 
-> **IMPORTANT**: This snapshot was saved BEFORE compaction. The compact summary
-> above may be inaccurate. Cross-check every claim in the summary against the
-> data below. If the summary says a task is "completed" but no corresponding
-> tool calls (Edit, Write, Bash) appear below, treat it as NOT done.
-> Do NOT trust the compact summary alone. Resume work from where the snapshot shows.
+> **IMPORTANT**: Cross-check the compact summary against data below.
+> If the summary claims a task is done but no matching actions appear here, treat it as NOT done.
+> Resume work from where this snapshot shows.
 
 > 2026-02-07 14:30:00 | Session: abc12345 | CWD: /Users/you/project
 
 ## Recent User Instructions
 
-### [2]
+**[1]**
 Fix the authentication bug in login.tsx and add tests
 
-### [1] <- Latest
+**[2] (latest)**
 Also update the API docs
 
-## Task Checklists Found in AI Responses
+## AI Progress
 
 - [x] Fix login bug
 - [ ] Add unit tests
 - [ ] Update API docs
 
-## Last AI Response Before Compaction
-
+**Last response:**
 I've completed the first task (fixing the login bug). Next I'll work on
 the unit tests...
 
-## AI Actions During Recent Conversation
+## Recent Actions
 
 - Read: src/components/login.tsx
 - Edit: src/components/login.tsx
-- TaskCreate: Add unit tests | Write tests for the login component
-
-*Interrupted by compaction, actions above may be incomplete*
+- Bash: npm test
 ```
 
 ---
 
 ## How It Works
 
-### 1. PreCompact Hook (`compact-save.sh`)
+### 1. PreCompact Hook (`compact_save.py`)
 
-Triggered before every compaction (manual or automatic):
+Triggered before every compaction:
 
-- Reads the session transcript (JSONL)
+- Reads the session transcript (JSONL), optimized for large files (only reads last 2MB)
 - Extracts the last 5 genuine user messages (filters out system messages, tool results, etc.)
-- Extracts AI text responses and checklist items (`- [ ]`, `- [x]`)
-- Extracts AI tool calls across the recent conversation window (including TaskCreate/TaskUpdate)
-- Adds a verification instruction telling the AI to cross-check the compact summary
-- Writes a concise snapshot to `~/.claude/last-compact-context.md`
+- Extracts AI text response, checklist items, and tool call summaries
+- Writes a session-specific snapshot to `~/.claude/compact-snapshot-<session_id>.md`
+- Cleans up stale snapshots (older than 10 minutes)
 
 ### 2. SessionStart Hook (`compact-restore.sh`)
 
 Triggered after compaction completes:
 
-- Reads the snapshot file
-- Checks it's less than 10 minutes old (avoids stale data)
-- Outputs content to stdout → automatically injected into AI context
+- Finds the session-specific snapshot
+- Checks it's less than 10 minutes old
+- Outputs content to stdout (automatically injected into AI context)
+- Deletes snapshot after successful restore
+
+### Technical Details
+
+**Transcript parsing** — Claude Code stores conversation history as JSONL (one JSON object per line). The save script parses each line, dispatches by message `type` (`user` / `assistant`), and extracts the relevant data. For large transcripts (>2MB), only the tail portion is read to stay within the 15-second hook timeout.
+
+**User message filtering** — In the JSONL format, system-injected content (`<system-reminder>`, CLAUDE.md, skill listings, etc.) appears as separate text blocks within a user message's content array. The plugin filters at the **individual text block level** — stripping system blocks while preserving the user's genuine text. This prevents legitimate instructions from being lost due to attached system metadata.
+
+**Tool call summarization** — Uses a unified parameter lookup (`file_path`, `command`, `pattern`, etc.) across all tool types, producing one-line summaries like `Read: src/app.tsx` or `Bash: npm test`. No per-tool-type logic needed.
+
+**Snapshot lifecycle** — Write before compaction → survive compaction (stored on disk, outside context window) → read after compaction via stdout injection → delete immediately. 10-minute TTL enforced on both sides. All errors exit silently (`exit 0`) — the plugin never blocks compaction or session start.
 
 ---
 
 ## Safety
 
-- **10-minute expiration**: Snapshots older than 10 minutes are ignored, preventing cross-session contamination
-- **Minimal context cost**: Up to 5 messages + checklists + 30 tool calls, capped at 12K chars (~3K tokens)
-- **Non-blocking**: All errors are handled gracefully—if anything fails, the hook exits silently
-- **Read-only transcript access**: The save script only reads the JSONL transcript, never modifies it
+- **Session isolation**: Each session saves to its own snapshot file
+- **10-minute expiration**: Stale snapshots are ignored and cleaned up
+- **Auto-cleanup**: Snapshots are deleted after restore
+- **Minimal context cost**: Capped at 12K chars (~3K tokens)
+- **Non-blocking**: All errors are handled gracefully — if anything fails, the hook exits silently
+- **Read-only**: The save script only reads the transcript, never modifies it
 
 ---
 
@@ -154,9 +158,9 @@ Triggered after compaction completes:
 
 | Platform | Status |
 |----------|--------|
-| macOS | ✅ |
-| Linux | ✅ |
-| Windows | ❌ (not yet) |
+| macOS | Supported |
+| Linux | Supported |
+| Windows | Not supported |
 
 ---
 
@@ -178,15 +182,13 @@ claude
 **Script test:**
 
 ```bash
-# Test save script with a real transcript
+# Test save with a real transcript
 echo '{"session_id":"test","transcript_path":"/path/to/session.jsonl","cwd":"/tmp"}' \
-  | bash scripts/compact-save.sh
+  | python3 scripts/compact_save.py
+cat ~/.claude/compact-snapshot-test.md
 
-# Check output
-cat ~/.claude/last-compact-context.md
-
-# Test restore script
-echo '{}' | bash scripts/compact-restore.sh
+# Test restore
+echo '{"session_id":"test"}' | bash scripts/compact-restore.sh
 ```
 
 ---
@@ -199,16 +201,6 @@ echo '{}' | bash scripts/compact-restore.sh
 4. Submit a pull request
 
 All contributions must be in English.
-
-**🤖 AI-assisted contributions are welcome!** Feel free to use Claude Code, GitHub Copilot, or other AI tools to help with your contributions.
-
----
-
-## Learn More
-
-- [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks)
-- [Claude Code Plugins Reference](https://code.claude.com/docs/en/plugins-reference)
-- [Claude Code Official Marketplace](https://github.com/anthropics/claude-plugins-official)
 
 ---
 
