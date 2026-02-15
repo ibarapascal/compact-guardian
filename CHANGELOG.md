@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.3] - 2026-02-15
+
+### Fixed
+- **Self-reference prevention**: Added `"Pre-Compaction Context Snapshot"` to `SYSTEM_MARKERS` filter list — previously injected snapshots are now excluded from subsequent snapshot captures, eliminating potential snapshot-within-snapshot propagation
+
 ## [0.1.2] - 2026-02-07
 
 ### Fixed

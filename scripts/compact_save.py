@@ -35,6 +35,7 @@ SYSTEM_MARKERS = [
     "<local-command-stdout>",
     "<system-reminder>",
     "<user-prompt-submit-hook>",
+    "Pre-Compaction Context Snapshot",
 ]
 
 CHECKLIST_RE = re.compile(

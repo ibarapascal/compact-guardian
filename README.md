@@ -6,7 +6,7 @@
 
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-blueviolet)](https://docs.anthropic.com/en/docs/claude-code)
 [![Platform](https://img.shields.io/badge/platform-macOS%20|%20Linux-lightgrey)](https://github.com/ibarapascal/compact-guardian)
-[![Version](https://img.shields.io/badge/version-0.1.2-blue)](https://github.com/ibarapascal/compact-guardian/releases)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue)](https://github.com/ibarapascal/compact-guardian/releases)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
